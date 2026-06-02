@@ -2,7 +2,7 @@ name: Monitor PF Agendamento
 
 on:
   schedule:
-    - cron: '*/30 * * * *'  # A cada 30 minutos
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -13,22 +13,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Configurar Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       
-      - name: Instalar dependências
+      - name: Install dependencies
         run: |
           pip install playwright requests
           playwright install chromium
           sudo apt-get update
-          sudo apt-get install -y libasound2t64 libatk-bridge2.0-0t64 libgtk-3-0t64 libgbm1 libxkbcommon0
+          sudo apt-get install -y libasound2t64 libatk-bridge2.0-0t64 libgtk-3-0t64 libgbm1
       
-      - name: Executar monitor
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      - name: Run monitor
         run: python monitor.py
       
       - name: Upload PDF
