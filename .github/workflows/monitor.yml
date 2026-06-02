@@ -2,29 +2,31 @@ name: Monitor PF Agendamento
 
 on:
   schedule:
-    # Executa a cada 6 horas (evita bloqueio do site)
-    - cron: '0 */6 * * *'
-  workflow_dispatch:  # Permite executar manualmente pelo site
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
       
-      - name: Configurar Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       
-      - name: Instalar dependências
+      - name: Install dependencies
         run: |
-          pip install requests
+          pip install playwright requests
+          playwright install chromium
+          sudo apt-get update
+          sudo apt-get install -y libasound2 libatk-bridge2.0-0 libgtk-3-0 libgbm1
       
-      - name: Executar monitor
+      - name: Run monitor
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python monitor.py
+        run: python monitor_auto.py
