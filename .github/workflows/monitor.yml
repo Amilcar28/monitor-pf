@@ -1,36 +1,23 @@
-name: Monitor PF Agendamento
+name: Monitor PF Completo
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: '*/30 * * * *'
-  workflow_dispatch:
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
-      - name: Install dependencies
+      - name: Instalar Playwright
         run: |
           pip install playwright requests
           playwright install chromium
           sudo apt-get update
-          sudo apt-get install -y libasound2t64 libatk-bridge2.0-0t64 libgtk-3-0t64 libgbm1
-      
-      - name: Run monitor
+          sudo apt-get install -y libasound2t64 libgtk-3-0t64
+      - name: Executar
         run: python monitor.py
-      
-      - name: Upload PDF
-        uses: actions/upload-artifact@v4
-        with:
-          name: comprovante
-          path: comprovante_*.pdf
-          if-no-files-found: ignore
