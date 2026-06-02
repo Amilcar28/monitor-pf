@@ -10,10 +10,8 @@ PROTOCOLO = "202604152154520921"
 DATA_NASCIMENTO = "02/04/1996"
 URL_BASE = "https://servicos.pf.gov.br/agenda-web/acessar"
 
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "8970536260:AAFIsovKbPTgHPm_kRHeLbPfyX0DR4-LyCo")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "7692839343")
-
-ARQUIVO_ESTADO = "estado.json"
+TELEGRAM_TOKEN = "8970536260:AAFIsovKbPTgHPm_kRHeLbPfyX0DR4-LyCo"
+TELEGRAM_CHAT_ID = "7692839343"
 
 def enviar_telegram(mensagem):
     try:
@@ -21,100 +19,92 @@ def enviar_telegram(mensagem):
         requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": mensagem}, timeout=10)
         print("✅ Telegram enviado")
     except Exception as e:
-        print(f"Erro: {e}")
-
-def enviar_pdf_telegram(caminho):
-    try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument"
-        with open(caminho, 'rb') as f:
-            requests.post(url, files={'document': f}, data={'chat_id': TELEGRAM_CHAT_ID, 'caption': '📄 Comprovante PF'}, timeout=30)
-        print("✅ PDF enviado")
-    except Exception as e:
-        print(f"Erro: {e}")
-
-def carregar_estado():
-    if os.path.exists(ARQUIVO_ESTADO):
-        with open(ARQUIVO_ESTADO, 'r') as f:
-            return json.load(f)
-    return {"ja_agendou": False}
-
-def salvar_estado(estado):
-    with open(ARQUIVO_ESTADO, 'w') as f:
-        json.dump(estado, f)
+        print(f"Erro Telegram: {e}")
 
 def monitorar():
-    estado = carregar_estado()
-    if estado.get("ja_agendou"):
-        print("✅ Já agendou")
-        return
-    
     print(f"🚀 Iniciando - {datetime.now()}")
     
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=False)
         page = browser.new_page()
         
         try:
+            print("🌐 Acessando site...")
             page.goto(URL_BASE, timeout=60000)
-            time.sleep(3)
+            time.sleep(5)
             
-            page.click("text=Migração")
-            time.sleep(1)
+            # Esperar a página carregar completamente
+            page.wait_for_load_state("networkidle")
             
+            # Tirar screenshot para debug
+            page.screenshot(path="site_carregado.png")
+            
+            # Tentar diferentes formas de selecionar o serviço
+            print("📌 Procurando opções de serviço...")
+            
+            # Lista de seletores possíveis
+            seletores = [
+                "text=Migração",
+                "text=Migracao",
+                "text=migração",
+                "input[value='Migração']",
+                "label:has-text('Migração')",
+                "button:has-text('Migração')",
+                "span:has-text('Migração')"
+            ]
+            
+            encontrou = False
+            for seletor in seletores:
+                try:
+                    if page.query_selector(seletor):
+                        page.click(seletor)
+                        print(f"✅ Clicou em: {seletor}")
+                        encontrou = True
+                        break
+                except:
+                    pass
+            
+            if not encontrou:
+                print("❌ Não encontrou a opção Migração")
+                # Mostra todos os textos clicáveis
+                todos_botoes = page.query_selector_all("button, a, input[type='button']")
+                print("Botões encontrados:")
+                for botao in todos_botoes[:10]:
+                    texto = botao.text_content()
+                    if texto:
+                        print(f"  - {texto.strip()}")
+                browser.close()
+                return
+            
+            time.sleep(2)
+            
+            # Preencher campos
+            print("📝 Preenchendo dados...")
             page.fill("input[type='text']", PROTOCOLO)
-            page.fill("input[type='date']", DATA_NASCIMENTO)
+            page.fill("input[type='date']", SUA_DATA_NASCIMENTO)
             time.sleep(1)
             
-            page.click("button:has-text('Prosseguir')")
+            # Clicar em prosseguir
+            print("▶️ Prosseguindo...")
+            botoes_prosseguir = ["button:has-text('Prosseguir')", "button:has-text('Avançar')", "input[value='Prosseguir']"]
+            for seletor in botoes_prosseguir:
+                if page.query_selector(seletor):
+                    page.click(seletor)
+                    break
+            
             time.sleep(5)
             
             conteudo = page.content()
-            
             if "nenhuma vaga" in conteudo.lower():
-                print("❌ Sem vagas")
+                print("❌ Nenhuma vaga disponível")
                 return
             
             print("✅ VAGAS ENCONTRADAS!")
-            enviar_telegram("🚨 VAGAS ENCONTRADAS! Iniciando agendamento...")
+            enviar_telegram("🚨 VAGAS ENCONTRADAS! Site da PF com disponibilidade!")
             
-            # Clica na primeira data disponível
-            dias = page.query_selector_all("td:has-text('/'), button:has-text('/')")
-            for dia in dias:
-                texto_dia = dia.text_content()
-                if '/' in texto_dia:
-                    print(f"📅 Data: {texto_dia}")
-                    dia.click()
-                    time.sleep(2)
-                    
-                    # Clica no primeiro horário
-                    horarios = page.query_selector_all("button:has-text(':')")
-                    for horario in horarios:
-                        texto_horario = horario.text_content()
-                        if ':' in texto_horario:
-                            print(f"⏰ Horário: {texto_horario}")
-                            horario.click()
-                            time.sleep(2)
-                            
-                            # Confirma
-                            confirmar = page.query_selector("button:has-text('Confirmar')")
-                            if confirmar:
-                                confirmar.click()
-                                time.sleep(3)
-                                
-                                # Salva PDF
-                                nome_pdf = f"comprovante_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-                                page.pdf(path=nome_pdf, format='A4')
-                                enviar_pdf_telegram(nome_pdf)
-                                
-                                msg = f"🎉 AGENDADO! {texto_dia} às {texto_horario}"
-                                enviar_telegram(msg)
-                                
-                                salvar_estado({"ja_agendou": True, "data": texto_dia, "horario": texto_horario})
-                                browser.close()
-                                return
-                            
         except Exception as e:
-            print(f"Erro: {e}")
+            print(f"❌ Erro: {e}")
+            page.screenshot(path="erro.png")
         finally:
             browser.close()
 
